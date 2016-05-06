@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
+<style type="text/css">
+
+    body {
+        background: #222;
+        color: #ddd;
+        font: 15px verdana;
+    }
+
+    #connectionStatus {
+        font-weight: bold;
+        font-size: 20px;
+    }
+
+    label {
+        display: block;
+        width: 100px;
+        margin: 10px 0 0 0;
+    }
+
+    input {
+        width: 400px;
+        height: 25px;
+        margin: 10px 20px;
+    }
+
+    span.value {
+        font: 20px monospace;
+    }
+
+</style>
+<script type="text/javascript">
+
+    /*
+     * Janky experiment with the Ganzfeld effect.
+     * This just flashes the entire array uniformly.
+     * Also this makes a good stress-test for the USB driver :)
+     */
+
+    $(function() {
+        // Original Function
+        function hexToRgb(hex) {
+            // http://stackoverflow.com/questions/5623838/rgb-to-hex-and-hex-to-rgb
+            // Expand shorthand form (e.g. "03F") to full form (e.g. "0033FF")
+            var shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+            hex = hex.replace(shorthandRegex, function(m, r, g, b) {
+                return r + r + g + g + b + b;
+            });
+
+            var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : null;
+        }
+
+        // Scrape values from our form
+        var color, frequency, contrast;
+        var updateSettings = function() {
+            color = hexToRgb($('#color').val());
+            $('#colorValue').text(color.r + ', ' + color.g + ', ' + color.b);
+
+            frequency = $('#frequency').val();
+            $('#frequencyValue').text(frequency + " Hz");
+
+            contrast = $('#contrast').val();
+            $('#contrastValue').text(contrast);
+        };
+        $('input').on('change', updateSettings);
+        updateSettings();
+
+        var leds = 144;
+
+        var Frame = {
+            r: Array.apply(null, Array(leds)).map(Number.prototype.valueOf,0),
+            g: Array.apply(null, Array(leds)).map(Number.prototype.valueOf,0),
+            b: Array.apply(null, Array(leds)).map(Number.prototype.valueOf,0),
+            writeOne: function(i, red, green, blue){
+                this.r[i] = red;
+                this.g[i] = green;
+                this.b[i] = blue;
+            },
+            clean: function(){
+                this.r = Array.apply(null, Array(leds)).map(Number.prototype.valueOf,0);
+                this.g = Array.apply(null, Array(leds)).map(Number.prototype.valueOf,0);
+                this.b = Array.apply(null, Array(leds)).map(Number.prototype.valueOf,0);
+            },
+            addOne: function(i, red, gree, blue){
+                this.r[i] = Math.min(255, this.r[i] + red);
+                this.g[i] = Math.min(255, this.g[i] + red);
+                this.b[i] = Math.min(255, this.b[i] + red);
+            }
+        };
+
+        function writeFrame(red, green, blue) {
+            var packet = new Uint8ClampedArray(4 + leds * 3);
+
+            if (socket.readyState != 1 /* OPEN */) {
+                // The server connection isn't open. Nothing to do.
+                return;
+            }
+
+            if (socket.bufferedAmount > packet.length) {
+                // The network is lagging, and we still haven't sent the previous frame.
+                // Don't flood the network, it will just make us laggy.
+                // If fcserver is running on the same computer, it should always be able
+                // to keep up with the frames we send, so we shouldn't reach this point.
+                return;
+            }
+
+            // Dest position in our packet. Start right after the header.
+            var dest = 4;
+
+            // Sample the center pixel of each LED
+            for (var led = 0; led < leds; led++) {
+                packet[dest++] = red;
+                packet[dest++] = green;
+                packet[dest++] = blue;
+            }
+            socket.send(packet.buffer);
+        }
+
+        // extended from writeFrame, can write a certain light pattern rather than single color
+        function advancedFrame(Fra){
+            var packet = new Uint8ClampedArray(4 + leds * 3);
+            if (socket.readyState != 1 /* OPEN */) {
+                return;
+            }
+
+            if (socket.bufferedAmount > packet.length) {return;
+            }
+            var dest = 4;
+
+            // Sample the center pixel of each LED
+            for (var led = 0; led < leds; led++) {
+                packet[dest++] = Fra.r[led];
+                packet[dest++] = Fra.g[led];
+                packet[dest++] = Fra.b[led];
+            }
+            // console.log(packet.toString());
+            socket.send(packet.buffer);
+        }
+
+        function allOff() {
+            writeFrame(0, 0, 0);
+        }
+        // Animation parameters
+        var lastTime = 0;
+        var phase = 0;
+        var startTime = 0;
+        var durationMS = 2000;
+        var dT = 200;
+
+        // Animation loop
+        var flash = function() {
+
+            // Get time delta
+            var thisTime = new Date().getTime();
+            var dt = (thisTime - lastTime) * 0.001;
+            lastTime = thisTime;
+            if ((thisTime - startTime)  > durationMS) {
+                console.log("Inside Flash Finish");
+                return;
+            } else {
+                $('#debug').text("Step into with" + (startTime - thisTime));
+            }
+
+            // Update animation
+            phase += frequency * 2 * Math.PI * dt;
+            var f = Math.sin(phase);
+
+            writeFrame(
+                color.r * (1 + contrast * f),
+                color.g * (1 + contrast * f),
+                color.b * (1 + contrast * f));
+
+            setTimeout(flash, 1);
+        };
+
+        // Make sure the light index is legal
+        function tailor(ind){
+            if (ind < 0){
+                newI = leds + ind;
+            }else if (ind > leds - 1){
+                newI = ind - leds;
+            }else{
+                newI = ind;
+            }
+            return newI;
+        }
+
+        // Moving points along the LED strip
+        // Edit the global parameters before calling the function
+        var chaseInd = 1;
+        var chaseRGB = [0, 0, 0];
+        var chase = function(){
+            var thisTime = new Date().getTime();
+            var dt = (thisTime - lastTime) * 0.001;
+            lastTime = thisTime;
+            if ((thisTime - startTime)  > durationMS) {
+                console.log("Inside Chase Finish");
+                return;
+            } else {
+                $('#debug').text("Step into with" + (startTime - thisTime));
+            }
+
+            Frame.clean();
+            chaseInd = tailor(++chaseInd);
+            var before = tailor(chaseInd - 1);
+            var after = tailor(chaseInd + 1);
+            console.log("chaseInd is" + chaseInd);
+            Frame.writeOne(chaseInd, chaseRGB[0], chaseRGB[1], chaseRGB[2]);
+            Frame.writeOne(before, chaseRGB[0]/2, chaseRGB[1]/2, chaseRGB[2]/2);
+            Frame.writeOne(after, chaseRGB[0]/2, chaseRGB[1]/2, chaseRGB[2]/2);
+
+            advancedFrame(Frame);
+
+            setTimeout(chase, dT);
+        };
+
+        // Random sparkling light
+        var sparkScale = 0.5;
+        var sparkPoints = 8;
+        var sparkRGB = [0, 200, 0];
+        var sparkSide = [sparkRGB[0]/2, sparkRGB[1]/2, sparkRGB[2]/2];
+        var spark = function () {
+            var thisTime = new Date().getTime();
+            var dt = (thisTime - lastTime) * 0.001;
+            lastTime = thisTime;
+            if ((thisTime - startTime)  > durationMS) {
+                console.log("Inside Chase Finish");
+                return;
+            } else {
+                $('#debug').text("Step into with" + (startTime - thisTime));
+            }
+
+            Frame.clean();
+            for (var i = sparkPoints - 1; i >= 0; i--) {
+                var ranInd = Math.floor(Math.random() * leds);
+                Frame.writeOne(ranInd, sparkRGB[0], sparkRGB[1], sparkRGB[2]);
+            }
+
+            advancedFrame(Frame);
+            setTimeout(spark, dT);
+        }
+
+        var taskqueue = [];
+        var animate = function(){
+            // Frame.writeOne(100, 200, 200, 200);
+            // advancedFrame(Frame);
+            // advancedFrame(Frame);
+            chaseInd = 1;
+            dT = 100/leds*1000;
+            durationMS = 5000;
+            chaseRGB = [201, 0, 0];
+            spark();
+            // writeFrame(100, 100, 100);
+            // writeFrame(100, 100, 100);
+            // allOff();
+            // allOff();
+            console.log("Finish Animate");
+        };
+
+        // Connect to a Fadecandy server running on the same computer, on the default port
+        var socket = new WebSocket('ws://localhost:7890');
+
+        // Put some connection status text in the corner of the screen
+        $('#connectionStatus').text('Connecting to fcserver...');
+        socket.onclose = function(event) {
+            $('#connectionStatus').text('Not connected to fcserver');
+        };
+        socket.onopen = function(event) {
+            $('#connectionStatus').text('Connected');
+            startTime = new Date().getTime();
+            animate();
+        };
+
+    });
+
+
+</script>
+</head>
+<body>
+<form>
+
+    <div id="connectionStatus"></div>
+
+    <div id="debug"></div>
+
+    <label for="color">Light color</label>
+    <input type="color" id="color" name="color" value="#1E0000">
+    <span class="value" id="colorValue"></span>
+    <br/>
+
+    <label for="frequency">Frequency</label>
+    <input type="range" id="frequency" name="frequency" min="0.5" max="100" value="1" step="0.01">
+    <span class="value" id="frequencyValue"></span>
+    <br/>
+
+    <label for="contrast">Contrast</label>
+    <input type="range" id="contrast" name="contrast" min="0" max="1" value="0.5" step="0.01">
+    <span class="value" id="contrastValue"></span>
+    <br/>
+
+</form>
+</body>
+</html>
