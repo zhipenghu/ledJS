@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-<script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
+<script src="jquery-2.2.3.js"></script>
+<!-- <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script> -->
 <style type="text/css">
 
     body {
@@ -59,16 +60,20 @@
         }
 
         // Scrape values from our form
-        var color, frequency, contrast;
+        var color, frequency, contrast, urgence;
+        var stop = 0;
         var updateSettings = function() {
             color = hexToRgb($('#color').val());
             $('#colorValue').text(color.r + ', ' + color.g + ', ' + color.b);
 
-            frequency = $('#frequency').val();
-            $('#frequencyValue').text(frequency + " Hz");
+            // frequency = $('#frequency').val();
+            // $('#frequencyValue').text(frequency + " Hz");
 
-            contrast = $('#contrast').val();
-            $('#contrastValue').text(contrast);
+            // contrast = $('#contrast').val();
+            // $('#contrastValue').text(contrast);
+
+            urgence = $('#urgence').val();
+            $('#urgenceValue').text(urgence);
         };
         $('input').on('change', updateSettings);
         updateSettings();
@@ -89,10 +94,10 @@
                 this.g = Array.apply(null, Array(leds)).map(Number.prototype.valueOf,0);
                 this.b = Array.apply(null, Array(leds)).map(Number.prototype.valueOf,0);
             },
-            addOne: function(i, red, gree, blue){
+            addOne: function(i, red, green, blue){
                 this.r[i] = Math.min(255, this.r[i] + red);
-                this.g[i] = Math.min(255, this.g[i] + red);
-                this.b[i] = Math.min(255, this.b[i] + red);
+                this.g[i] = Math.min(255, this.g[i] + green);
+                this.b[i] = Math.min(255, this.b[i] + blue);
             }
         };
 
@@ -148,6 +153,7 @@
         function allOff() {
             writeFrame(0, 0, 0);
         }
+
         // Animation parameters
         var lastTime = 0;
         var phase = 0;
@@ -162,8 +168,9 @@
             var thisTime = new Date().getTime();
             var dt = (thisTime - lastTime) * 0.001;
             lastTime = thisTime;
-            if ((thisTime - startTime)  > durationMS) {
+            if ((thisTime - startTime)  > durationMS  || stop == 1) {
                 console.log("Inside Flash Finish");
+                stop = 0;
                 return;
             } else {
                 $('#debug').text("Step into with" + (startTime - thisTime));
@@ -201,8 +208,9 @@
             var thisTime = new Date().getTime();
             var dt = (thisTime - lastTime) * 0.001;
             lastTime = thisTime;
-            if ((thisTime - startTime)  > durationMS) {
+            if ((thisTime - startTime)  > durationMS  || stop == 1) {
                 console.log("Inside Chase Finish");
+                stop = 0;
                 return;
             } else {
                 $('#debug').text("Step into with" + (startTime - thisTime));
@@ -225,37 +233,64 @@
         // Random sparkling light
         var sparkScale = 0.5;
         var sparkPoints = 8;
-        var sparkRGB = [0, 200, 0];
+        var sparkRGB = [0, 0, 0];
         var sparkSide = [sparkRGB[0]/2, sparkRGB[1]/2, sparkRGB[2]/2];
         var spark = function () {
+            
+            sparkPoints = urgence * 2;
+            dT = 1500/urgence/leds*1000;
+            
             var thisTime = new Date().getTime();
             var dt = (thisTime - lastTime) * 0.001;
             lastTime = thisTime;
-            if ((thisTime - startTime)  > durationMS) {
+            if (stop == 1) {
                 console.log("Inside Chase Finish");
+                allOff();
+                stop = 0;
                 return;
             } else {
-                $('#debug').text("Step into with" + (startTime - thisTime));
+                $('#debug').text("Step into with" + (thisTime - startTime));
             }
 
             Frame.clean();
             for (var i = sparkPoints - 1; i >= 0; i--) {
                 var ranInd = Math.floor(Math.random() * leds);
+                var previous = tailor(ranInd+1);
+                var after = tailor(ranInd-1);
                 Frame.writeOne(ranInd, sparkRGB[0], sparkRGB[1], sparkRGB[2]);
+                Frame.addOne(previous, sparkSide[0], sparkSide[1], sparkSide[2]);
+                Frame.addOne(after, sparkSide[0], sparkSide[1], sparkSide[2]);
             }
 
             advancedFrame(Frame);
             setTimeout(spark, dT);
-        }
+        };
 
         var taskqueue = [];
+
+        var hour = 5;
+        var minutes = 45;
+        var showTime = function(){
+            var hourPos = Math.floor(leds*hour/12);
+            var previous = tailor(hourPos-1);
+            var after = tailor(hourPos+1);
+            var minPos = Math.floor(leds*minutes/60);
+            Frame.clean();
+            Frame.writeOne(hourPos, 255, 255, 255);
+            Frame.writeOne(previous, 255, 255, 255);
+            Frame.writeOne(after, 255, 255, 255);
+            Frame.writeOne(minPos, 255, 0, 0);
+            $('#debug').text("Display the Time" );
+            advancedFrame(Frame);
+        };
+
         var animate = function(){
             // Frame.writeOne(100, 200, 200, 200);
             // advancedFrame(Frame);
             // advancedFrame(Frame);
             chaseInd = 1;
             dT = 100/leds*1000;
-            durationMS = 5000;
+            durationMS = 50000;
             chaseRGB = [201, 0, 0];
             spark();
             // writeFrame(100, 100, 100);
@@ -265,8 +300,33 @@
             console.log("Finish Animate");
         };
 
+        document.getElementById('APrepare').onclick = function(event) {
+            stop = 0;
+            sparkRGB = [250, 0, 0];
+            sparkSide = [sparkRGB[0]/2, sparkRGB[1]/2, sparkRGB[2]/2];
+            startTime = new Date().getTime();
+            spark();
+        };
+
+        document.getElementById('BPrepare').onclick = function(event) {
+            stop = 0;
+            sparkRGB = [0, 0, 250];
+            sparkSide = [sparkRGB[0]/2, sparkRGB[1]/2, sparkRGB[2]/2];
+            startTime = new Date().getTime();
+            spark();
+        };
+
+        document.getElementById('Stop').onclick = function(event) {
+            stop = 1;
+            allOff();
+        };
+
+        document.getElementById('Time').onclick = function(event) {
+            showTime();
+        };
+
         // Connect to a Fadecandy server running on the same computer, on the default port
-        var socket = new WebSocket('ws://localhost:7890');
+        var socket = new WebSocket('ws://192.168.0.101:7890');
 
         // Put some connection status text in the corner of the screen
         $('#connectionStatus').text('Connecting to fcserver...');
@@ -275,8 +335,7 @@
         };
         socket.onopen = function(event) {
             $('#connectionStatus').text('Connected');
-            startTime = new Date().getTime();
-            animate();
+            // animate();
         };
 
     });
@@ -296,7 +355,7 @@
     <span class="value" id="colorValue"></span>
     <br/>
 
-    <label for="frequency">Frequency</label>
+    <!-- <label for="frequency">Frequency</label>
     <input type="range" id="frequency" name="frequency" min="0.5" max="100" value="1" step="0.01">
     <span class="value" id="frequencyValue"></span>
     <br/>
@@ -304,7 +363,22 @@
     <label for="contrast">Contrast</label>
     <input type="range" id="contrast" name="contrast" min="0" max="1" value="0.5" step="0.01">
     <span class="value" id="contrastValue"></span>
+    <br/> -->
+
+    <button type="button" id="Stop">Stop</button>
+
+    <label for="urgence">Urgence</label>
+    <input type="range" id="urgence" name="urgence" min="1" max="10" value="6" step="1">
+    <span class="value" id="urgenceValue"></span>
     <br/>
+
+    <button type="button" id="APrepare">A_Prepare</button>
+
+    <button type="button" id="BPrepare">B_Prepare</button>
+
+    <!-- <input type="text" id="Hour" onChange="var hour=document.getElementById('Hour').value; $('#debug').text("Typed Hour" + hour);"><br /> -->
+
+    <button type="button" id="Time">Show Time</button>
 
 </form>
 </body>
