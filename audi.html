@@ -234,7 +234,7 @@
         var sparkScale = 0.5;
         var sparkPoints = 8;
         var sparkRGB = [0, 0, 0];
-        var sparkSide = [sparkRGB[0]/2, sparkRGB[1]/2, sparkRGB[2]/2];
+        var sparkSide = [sparkRGB[0]/4, sparkRGB[1]/4, sparkRGB[2]/4];
         var spark = function () {
             
             sparkPoints = urgence * 2;
@@ -302,8 +302,8 @@
 
         document.getElementById('APrepare').onclick = function(event) {
             stop = 0;
-            sparkRGB = [250, 0, 0];
-            sparkSide = [sparkRGB[0]/2, sparkRGB[1]/2, sparkRGB[2]/2];
+            sparkRGB = [180, 32, 52];
+            sparkSide = [sparkRGB[0]/4, sparkRGB[1]/4, sparkRGB[2]/4];
             startTime = new Date().getTime();
             spark();
         };
@@ -311,7 +311,7 @@
         document.getElementById('BPrepare').onclick = function(event) {
             stop = 0;
             sparkRGB = [0, 0, 250];
-            sparkSide = [sparkRGB[0]/2, sparkRGB[1]/2, sparkRGB[2]/2];
+            sparkSide = [sparkRGB[0]/4, sparkRGB[1]/4, sparkRGB[2]/4];
             startTime = new Date().getTime();
             spark();
         };
@@ -326,7 +326,7 @@
         };
 
         // Connect to a Fadecandy server running on the same computer, on the default port
-        var socket = new WebSocket('ws://192.168.0.101:7890');
+        var socket = new WebSocket('ws://192.168.43.112:7890');
 
         // Put some connection status text in the corner of the screen
         $('#connectionStatus').text('Connecting to fcserver...');
